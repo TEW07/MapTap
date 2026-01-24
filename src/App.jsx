@@ -22,7 +22,7 @@ const AlertIcon = () => (
   </svg>
 )
 
-const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzTe-DSeqVw2liDEwYN3z6tVhKQwCz-UziaNunCKzoJx_66kxJwHmxeA64ZrckcHA3V/exec'
+const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxlBPpcnYN6LRsTSAvtOFFMTuasmNr2AtD4gjUdvnDUL7i3cTwNbFc1WVCErv11b9c/exec'
 
 function App() {
   const [scoreText, setScoreText] = useState('')
