@@ -32,11 +32,20 @@ function App() {
   const [parsedData, setParsedData] = useState(null)
 
   const parseMapTapScore = (text) => {
+    console.log('=== MAPTAP DEBUG: Parsing score ===')
+    console.log('Raw input:', text)
+
     const cleanText = text.replace(/[_*]/g, '').trim()
+    console.log('Cleaned text:', cleanText)
+
     const dateMatch = cleanText.match(/\b([A-Za-z]+)\s+(\d{1,2})\b/)
     const finalScoreMatch = cleanText.match(/Final score:\s*(\d{3,4})/i)
 
+    console.log('Date match:', dateMatch)
+    console.log('Score match:', finalScoreMatch)
+
     if (!dateMatch || !finalScoreMatch) {
+      console.error('Parse failed - missing date or score match')
       return null
     }
 
@@ -51,38 +60,74 @@ function App() {
     }
 
     const monthNum = monthMap[month] || month
+    const parsedDate = `${day.padStart(2, '0')}/${monthNum}/2026`
+
+    console.log('Parsed month:', month, '-> monthNum:', monthNum)
+    console.log('Parsed day:', day)
+    console.log('Final formatted date:', parsedDate)
+    console.log('Final score:', finalScore)
 
     return {
-      date: `${day.padStart(2, '0')}/${monthNum}/2025`,
+      date: parsedDate,
       finalScore: finalScore,
       rawText: text
     }
   }
 
   const submitToGoogleSheets = async (playerName, data) => {
-    // CORS FIX: Use text/plain instead of application/json
-    // This avoids triggering a preflight request that Google Apps Script can't handle
-    // The JSON is still received correctly in e.postData.contents on the Apps Script side
-    const response = await fetch(SHEET_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-      body: JSON.stringify({
-        name: playerName,
-        date: data.date,
-        score: data.finalScore
-      }),
-      redirect: 'follow'
-    })
-
-    const result = await response.json()
-
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to submit score')
+    const payload = {
+      name: playerName,
+      date: data.date,
+      score: data.finalScore
     }
 
-    return result
+    // DEBUG: Log the exact payload being sent
+    console.log('=== MAPTAP DEBUG: Submitting to Google Sheets ===')
+    console.log('Endpoint:', SHEET_ENDPOINT)
+    console.log('Payload:', JSON.stringify(payload, null, 2))
+
+    try {
+      const response = await fetch(SHEET_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(payload),
+        redirect: 'follow'
+      })
+
+      // DEBUG: Log response details
+      console.log('Response status:', response.status)
+      console.log('Response ok:', response.ok)
+      console.log('Response URL (after redirects):', response.url)
+
+      const responseText = await response.text()
+      console.log('Raw response text:', responseText)
+
+      let result
+      try {
+        result = JSON.parse(responseText)
+        console.log('Parsed response:', JSON.stringify(result, null, 2))
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError)
+        throw new Error(`Invalid response from server: ${responseText.substring(0, 200)}`)
+      }
+
+      if (!result.success) {
+        console.error('Server returned error:', result.error)
+        throw new Error(result.error || 'Failed to submit score')
+      }
+
+      console.log('=== SUCCESS: Score submitted ===')
+      console.log('Row:', result.row, 'Col:', result.col)
+      return result
+
+    } catch (fetchError) {
+      console.error('=== FETCH ERROR ===')
+      console.error('Error type:', fetchError.name)
+      console.error('Error message:', fetchError.message)
+      throw fetchError
+    }
   }
 
   const handleSubmit = async () => {
