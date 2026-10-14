@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:apps-script": "node --test apps-script/test/weekly-summary.test.js"
   },
   "dependencies": {
     "react": "^18.2.0",
