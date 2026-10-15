@@ -1,0 +1,142 @@
+// Turns computeWeeklyStats_() output into the email subject, plain text and
+// HTML. No Apps Script services in here either, so it's testable under Node.
+
+function joinList_(items) {
+  const unique = items.filter((item, i) => items.indexOf(item) === i);
+  if (unique.length < 2) return unique.join('');
+  return unique.slice(0, -1).join(', ') + ' & ' + unique[unique.length - 1];
+}
+
+function plural_(count, word) {
+  return count + ' ' + word + (count === 1 ? '' : 's');
+}
+
+function formatChange_(change) {
+  if (change === null) return '';
+  const rounded = Math.round(change);
+  if (rounded > 0) return '▲' + rounded;
+  if (rounded < 0) return '▼' + -rounded;
+  return '=';
+}
+
+function escapeHtml_(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Each callout is a plain statement of fact plus a line of banter from Banter.js.
+function weeklyCallouts_(stats, random) {
+  const callouts = [];
+  const add = (icon, fact, category, name) =>
+    callouts.push({ icon: icon, fact: fact, banter: banter_(category, { name: name }, random) });
+  const namesOf = items => joinList_(items.map(item => item.name));
+  const describeScores = entries => namesOf(entries) + ' with ' + entries[0].score +
+    ' (' + joinList_(entries.map(entry => formatDay_(entry.day))) + ')';
+
+  const winners = namesOf(stats.winners);
+  add('🏆', 'Winner: ' + winners + ' on ' + plural_(stats.winners[0].points, 'pt'), 'winner', winners);
+
+  if (stats.woodenSpoons.length) {
+    const spoons = namesOf(stats.woodenSpoons);
+    add('🥄', 'Wooden spoon: ' + spoons + ' on ' + plural_(stats.woodenSpoons[0].points, 'pt'),
+      'woodenSpoon', spoons);
+  }
+
+  add('🔥', 'Highest score: ' + describeScores(stats.highest), 'highest', namesOf(stats.highest));
+  add('🧊', 'Lowest score: ' + describeScores(stats.lowest), 'lowest', namesOf(stats.lowest));
+
+  if (stats.mostImproved) {
+    const player = stats.mostImproved;
+    add('📈', 'Most improved: ' + player.name + ', average up ' + Math.round(player.averageChange) +
+      ' on last week', 'improved', player.name);
+  }
+  if (stats.biggestDrop) {
+    const player = stats.biggestDrop;
+    add('📉', 'Biggest drop: ' + player.name + ', average down ' + Math.round(-player.averageChange) +
+      ' on last week', 'dropped', player.name);
+  }
+
+  stats.noShows.forEach(player => {
+    add('👻', 'Missed: ' + player.name + ', ' + plural_(player.missed, 'day'), 'missed', player.name);
+  });
+
+  if (stats.stillToPlay.length) {
+    const names = namesOf(stats.stillToPlay);
+    add('⏰', 'No score yet today from ' + names, 'stillToPlay', names);
+  }
+  return callouts;
+}
+
+function buildWeeklyEmail_(stats, random) {
+  const range = formatDay_(stats.weekStartKey) + ' – ' + formatDay_(stats.weekEndKey);
+  const winners = joinList_(stats.winners.map(player => player.name));
+  const subject = '🎯 MapTap weekly: ' + winners +
+    (stats.winners.length > 1 ? ' share the week' : ' wins the week');
+  const groupChange = formatChange_(stats.groupAverageChange);
+  const groupLine = 'Group average: ' + Math.round(stats.groupAverage) +
+    (groupChange ? ' (' + groupChange + ' on last week)' : '');
+  const callouts = weeklyCallouts_(stats, random);
+  const footer = 'Points use the Scoring System tab, same as the leaderboard. ' +
+    'Missed days score 0 points; averages only count days played.';
+
+  const text = [
+    'MapTap weekly summary: ' + range,
+    groupLine,
+    '',
+    ...stats.standings.map(player => player.position + '. ' + player.name + ': ' +
+      plural_(player.points, 'pt') + ' ' + formatChange_(player.pointsChange) +
+      ', avg ' + (player.average === null ? '-' : Math.round(player.average) + ' ' +
+      formatChange_(player.averageChange)) +
+      (player.missed ? ', missed ' + player.missed : '')),
+    '',
+    ...callouts.map(c => c.icon + ' ' + c.fact + '\n   ' + c.banter),
+    '',
+    footer,
+  ].join('\n');
+
+  const cell = 'padding:8px 6px;border-bottom:1px solid #e5e7eb;';
+  const head = 'padding:8px 6px;border-bottom:2px solid #111827;text-align:left;font-size:12px;' +
+    'color:#6b7280;text-transform:uppercase;';
+  const change = value => {
+    const label = formatChange_(value);
+    if (!label) return '';
+    const colour = label[0] === '▲' ? '#15803d' : label[0] === '▼' ? '#b91c1c' : '#6b7280';
+    return ' <span style="font-size:12px;color:' + colour + ';">' + label + '</span>';
+  };
+
+  const rows = stats.standings.map(player => {
+    const isWinner = player.position === 1;
+    return '<tr' + (isWinner ? ' style="background:#ecfdf5;"' : '') + '>' +
+      '<td style="' + cell + '">' + player.position + '</td>' +
+      '<td style="' + cell + (isWinner ? 'font-weight:bold;' : '') + '">' + escapeHtml_(player.name) + '</td>' +
+      '<td style="' + cell + '">' + player.points + change(player.pointsChange) + '</td>' +
+      '<td style="' + cell + '">' + (player.average === null ? '–' : Math.round(player.average)) +
+        change(player.averageChange) + '</td>' +
+      '<td style="' + cell + '">' + (player.missed || '') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const calloutHtml = callouts.map(c =>
+    '<p style="margin:0 0 14px;">' +
+    '<strong>' + c.icon + ' ' + escapeHtml_(c.fact) + '</strong><br>' +
+    '<em style="color:#4b5563;">' + escapeHtml_(c.banter) + '</em></p>').join('');
+
+  const html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;color:#111827;max-width:560px;margin:0 auto;">' +
+    '<h1 style="font-size:22px;margin:0 0 4px;">🎯 MapTap weekly summary</h1>' +
+    '<p style="margin:0 0 4px;color:#6b7280;">' + escapeHtml_(range) + '</p>' +
+    '<p style="margin:0 0 16px;color:#6b7280;">' + escapeHtml_(groupLine) + '</p>' +
+    '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px;">' +
+    '<tr><th style="' + head + '">#</th><th style="' + head + '">Player</th>' +
+    '<th style="' + head + '">Pts</th><th style="' + head + '">Avg</th>' +
+    '<th style="' + head + '">Missed</th></tr>' +
+    rows + '</table>' +
+    calloutHtml +
+    '<p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">' + escapeHtml_(footer) + '</p>' +
+    '</div>';
+
+  return { subject: subject, text: text, html: html };
+}
