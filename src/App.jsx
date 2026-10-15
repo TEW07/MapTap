@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { parseMapTapScore } from './parseMapTapScore.js'
 
 // Simple SVG icons
 const SendIcon = () => (
@@ -24,55 +25,28 @@ const AlertIcon = () => (
 
 const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyxlBPpcnYN6LRsTSAvtOFFMTuasmNr2AtD4gjUdvnDUL7i3cTwNbFc1WVCErv11b9c/exec'
 
+// Shown straight away and if the sheet can't be reached. The real list comes
+// from Sheet1's header row, so new players don't need a code change.
+const FALLBACK_PLAYERS = ['Henry', 'Max', 'Nathan', 'Rob', 'Sean', 'Simon', 'Tom', 'Will']
+
 function App() {
   const [scoreText, setScoreText] = useState('')
   const [name, setName] = useState('')
   const [status, setStatus] = useState('idle')
   const [message, setMessage] = useState('')
   const [parsedData, setParsedData] = useState(null)
+  const [players, setPlayers] = useState(FALLBACK_PLAYERS)
 
-  const parseMapTapScore = (text) => {
-    console.log('=== MAPTAP DEBUG: Parsing score ===')
-    console.log('Raw input:', text)
-
-    const cleanText = text.replace(/[_*]/g, '').trim()
-    console.log('Cleaned text:', cleanText)
-
-    const dateMatch = cleanText.match(/\b([A-Za-z]+)\s+(\d{1,2})\b/)
-    const finalScoreMatch = cleanText.match(/Final score:\s*(\d{3,4})/i)
-
-    console.log('Date match:', dateMatch)
-    console.log('Score match:', finalScoreMatch)
-
-    if (!dateMatch || !finalScoreMatch) {
-      console.error('Parse failed - missing date or score match')
-      return null
-    }
-
-    const month = dateMatch[1]
-    const day = dateMatch[2]
-    const finalScore = finalScoreMatch[1]
-
-    const monthMap = {
-      'January': '01', 'February': '02', 'March': '03', 'April': '04',
-      'May': '05', 'June': '06', 'July': '07', 'August': '08',
-      'September': '09', 'October': '10', 'November': '11', 'December': '12'
-    }
-
-    const monthNum = monthMap[month] || month
-    const parsedDate = `${day.padStart(2, '0')}/${monthNum}/2026`
-
-    console.log('Parsed month:', month, '-> monthNum:', monthNum)
-    console.log('Parsed day:', day)
-    console.log('Final formatted date:', parsedDate)
-    console.log('Final score:', finalScore)
-
-    return {
-      date: parsedDate,
-      finalScore: finalScore,
-      rawText: text
-    }
-  }
+  useEffect(() => {
+    fetch(SHEET_ENDPOINT)
+      .then((response) => response.json())
+      .then((result) => {
+        if (!result.success || !result.players.length) return
+        console.log('Players loaded from sheet:', result.players.join(', '))
+        setPlayers(result.players)
+      })
+      .catch((error) => console.warn('Could not load players from the sheet, using fallback list:', error))
+  }, [])
 
   const submitToGoogleSheets = async (playerName, data) => {
     const payload = {
@@ -166,8 +140,6 @@ function App() {
     }
   }
 
-  const names = ['Henry', 'Max', 'Nathan', 'Rob', 'Sean', 'Simon', 'Tom']
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 flex items-center justify-center">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
@@ -187,7 +159,7 @@ function App() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
             >
               <option value="">Select your name...</option>
-              {names.map((n) => (
+              {players.map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>

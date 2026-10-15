@@ -5,7 +5,7 @@ project "MapTap Score Updater").
 
 | File | What it does |
 |---|---|
-| `ScoreUpdater.js` | `doPost` web app the React form submits to. Copy of what's already deployed. |
+| `ScoreUpdater.js` | Web app the React form talks to: `doGet` lists players, `doPost` writes a score. |
 | `Config.js` | Tab names, timezone, sender name. |
 | `Stats.js` | Weekly stats: points, averages, highs/lows, missed days, change on last week. |
 | `Banter.js` | The insults. Edit freely. |
@@ -14,15 +14,31 @@ project "MapTap Score Updater").
 | `WeeklySummary.js` | Reads the sheet, sends the weekly email, installs the Sunday trigger. |
 
 `Stats.js`, `Banter.js` and `WeeklyEmail.js` don't touch any Google services, so they're
-tested under Node: `npm run test:apps-script`.
+tested under Node, as is `ScoreUpdater.js` against a fake sheet: `npm test`.
+
+## Updating the form's web app (`ScoreUpdater.js`)
+
+The form only sees changes to this file after a **redeploy**:
+
+1. Open the sheet → **Extensions → Apps Script**, open the file with `doPost` in it
+   (probably `Code.gs`), select all, and paste in `ScoreUpdater.js`. Save (Ctrl+S).
+2. Pick **`checkScoreUpdater`** in the function dropdown → **Run**. It only reads the sheet.
+   The log should list every player and show today's row.
+3. **Deploy → Manage deployments** → select the existing deployment → **✏️ Edit** →
+   **Version: New version** → **Deploy**.
+   - Don't use **Deploy → New deployment**. That creates a new URL, and the form
+     would keep calling the old one.
+   - Leave *Execute as: Me* and *Who has access: Anyone* as they are.
+4. Open the web app URL (ends `/exec`) in a browser. You should see
+   `{"success":true,"players":[...]}`.
 
 ## Weekly summary setup (one-off, ~10 minutes)
 
 1. Open the sheet → **Extensions → Apps Script**.
 2. For each of `Config.js`, `Stats.js`, `Banter.js`, `WeeklyEmail.js`, `Broadcast.js`,
    `WeeklySummary.js`: click **+ → Script**, name it (e.g. `Config`), delete the
-   placeholder and paste the file's contents. **Don't** add `ScoreUpdater.js`: that code
-   is already there, and a second `doPost` would break the form.
+   placeholder and paste the file's contents. **Don't** add `ScoreUpdater.js` again: it's
+   already there, and a second copy would break the form.
 3. Save (Ctrl+S). Pick **`setupWeeklySummary`** in the function dropdown → **Run**.
    - Google asks for new permissions (send email, run on a schedule). You'll get a
      "Google hasn't verified this app" screen: **Advanced → Go to MapTap Score Updater**.
@@ -32,7 +48,7 @@ tested under Node: `npm run test:apps-script`.
 4. Fill in everyone's **Email** on the Contacts tab.
 5. Run **`previewWeeklySummary`**: it emails last week's summary to you only.
 
-You don't need to redeploy the web app. Triggers always run the latest saved code.
+These files don't need a redeploy. Triggers always run the latest saved code.
 
 ## Day-to-day
 

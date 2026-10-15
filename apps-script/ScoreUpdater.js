@@ -1,157 +1,122 @@
-// Web app that receives scores from the React form (src/App.jsx) and writes
-// them into Sheet1. This is a copy of what's already deployed as
-// "MapTap Score Updater" - kept here for version control.
+// Web app the React form (src/App.jsx) talks to, deployed as
+// "MapTap Score Updater". After changing this file, redeploy it: see README.md.
+//
+//   GET                                       -> { success, players }
+//   POST { name, date: 'dd/mm/yyyy', score }  -> writes the score into Sheet1
+//
+// Deliberately self-contained, so the form keeps working whatever happens to
+// the weekly summary files.
 
-function doGet(e) {
-  return ContentService
-    .createTextOutput('Script is accessible! Deployment is working correctly.')
-    .setMimeType(ContentService.MimeType.TEXT);
-}
+const SCORE_SHEET_NAME = 'Sheet1';
 
-function doPost(e) {
-  // Create a log array to track what happens
-  const debugLog = [];
-
+// Player names for the form's dropdown, so a new player only needs a new
+// column in Sheet1.
+function doGet() {
   try {
-    debugLog.push('=== doPost called ===');
-    debugLog.push('postData exists: ' + (e.postData ? 'yes' : 'no'));
-    debugLog.push('postData.contents: ' + (e.postData ? e.postData.contents : 'N/A'));
-
-    const data = JSON.parse(e.postData.contents);
-    debugLog.push('Parsed data: ' + JSON.stringify(data));
-
-    const playerName = data.name;
-    const dateStr = data.date;
-    const score = data.score;
-
-    debugLog.push('Player: ' + playerName);
-    debugLog.push('Date string: ' + dateStr);
-    debugLog.push('Score: ' + score);
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    debugLog.push('Spreadsheet name: ' + ss.getName());
-
-    const sheet = ss.getSheetByName('Sheet1');
-    if (!sheet) {
-      debugLog.push('ERROR: Sheet1 not found!');
-      return buildResponse({
-        success: false,
-        error: 'Sheet1 not found',
-        debug: debugLog
-      });
-    }
-    debugLog.push('Sheet found: Sheet1');
-
-    const dataRange = sheet.getDataRange();
-    const values = dataRange.getValues();
-    debugLog.push('Data range rows: ' + values.length);
-    debugLog.push('Data range cols: ' + (values[0] ? values[0].length : 0));
-
-    // Log first few rows of column A for debugging
-    debugLog.push('--- Column A values (first 10 rows) ---');
-    for (let i = 0; i < Math.min(10, values.length); i++) {
-      const cellVal = values[i][0];
-      const cellType = typeof cellVal;
-      const cellStr = cellVal instanceof Date ? cellVal.toISOString() : String(cellVal);
-      debugLog.push('Row ' + (i+1) + ': [' + cellType + '] ' + cellStr);
-    }
-
-    let targetRow = -1;
-    const dayPart = dateStr.split('/')[0];
-    const monthPart = dateStr.split('/')[1];
-    debugLog.push('Looking for day: ' + dayPart + ', month: ' + monthPart);
-
-    for (let i = 0; i < values.length; i++) {
-      const cellDate = values[i][0];
-
-      if (cellDate) {
-        let cellDateStr;
-
-        // Handle Date objects vs strings
-        if (cellDate instanceof Date) {
-          const cellDay = cellDate.getDate().toString().padStart(2, '0');
-          const cellMonth = (cellDate.getMonth() + 1).toString().padStart(2, '0');
-          cellDateStr = cellDay + '/' + cellMonth;
-          debugLog.push('Row ' + (i+1) + ' Date object: day=' + cellDay + ' month=' + cellMonth);
-        } else {
-          cellDateStr = cellDate.toString();
-        }
-
-        // Check if this row matches the day
-        if (cellDateStr.includes(dayPart + '/' + monthPart) ||
-            (cellDate instanceof Date &&
-             cellDate.getDate() === parseInt(dayPart) &&
-             (cellDate.getMonth() + 1) === parseInt(monthPart))) {
-          targetRow = i + 1;
-          debugLog.push('MATCH FOUND at row ' + targetRow);
-          break;
-        }
-      }
-    }
-
-    if (targetRow === -1) {
-      debugLog.push('ERROR: Date not found in sheet');
-      return buildResponse({
-        success: false,
-        error: 'Date not found in sheet. Looking for day: ' + dayPart + ', month: ' + monthPart,
-        debug: debugLog
-      });
-    }
-
-    const headers = values[0];
-    let targetCol = -1;
-
-    debugLog.push('--- Headers ---');
-    debugLog.push(JSON.stringify(headers));
-
-    for (let j = 0; j < headers.length; j++) {
-      const headerVal = String(headers[j]).trim();
-      debugLog.push('Header ' + j + ': "' + headerVal + '" vs "' + playerName + '" = ' + (headerVal === playerName));
-      if (headerVal === playerName) {
-        targetCol = j + 1;
-        debugLog.push('COLUMN MATCH at col ' + targetCol);
-        break;
-      }
-    }
-
-    if (targetCol === -1) {
-      debugLog.push('ERROR: Player not found in headers');
-      return buildResponse({
-        success: false,
-        error: 'Player "' + playerName + '" not found in header row.',
-        debug: debugLog
-      });
-    }
-
-    debugLog.push('Setting value at row=' + targetRow + ' col=' + targetCol + ' value=' + score);
-    sheet.getRange(targetRow, targetCol).setValue(score);
-    debugLog.push('setValue completed');
-
-    // Verify the write
-    const verifyValue = sheet.getRange(targetRow, targetCol).getValue();
-    debugLog.push('Verification read: ' + verifyValue);
-
-    return buildResponse({
-      success: true,
-      message: 'Score recorded successfully',
-      row: targetRow,
-      col: targetCol,
-      debug: debugLog
-    });
-
+    const values = getScoreSheet_().getDataRange().getValues();
+    return jsonResponse_({ success: true, players: readPlayers_(values) });
   } catch (error) {
-    debugLog.push('EXCEPTION: ' + error.toString());
-    debugLog.push('Stack: ' + error.stack);
-    return buildResponse({
-      success: false,
-      error: error.toString(),
-      debug: debugLog
-    });
+    console.error(error);
+    return jsonResponse_({ success: false, error: String(error.message || error) });
   }
 }
 
-function buildResponse(data) {
-  const output = ContentService.createTextOutput(JSON.stringify(data));
-  output.setMimeType(ContentService.MimeType.JSON);
-  return output;
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    console.log('Submission: ' + e.postData.contents);
+
+    const name = String(data.name || '').trim();
+    const date = normaliseDate_(data.date);
+    const score = Number(data.score);
+    if (!date) return failure_('Date must look like dd/mm/yyyy, got "' + data.date + '".');
+    if (!Number.isInteger(score) || score < 0) {
+      return failure_('Score must be a whole number, got "' + data.score + '".');
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getScoreSheet_();
+    const values = sheet.getDataRange().getValues();
+
+    const playerIndex = readPlayers_(values).indexOf(name);
+    if (playerIndex === -1) return failure_('"' + name + '" isn\'t in the header row of ' + SCORE_SHEET_NAME + '.');
+    const col = playerIndex + 2; // players start in column B
+
+    const row = findDateRow_(values, date, ss.getSpreadsheetTimeZone());
+    if (row === -1) {
+      return failure_('There\'s no row for ' + date + ' in ' + SCORE_SHEET_NAME + ' yet. Add that month\'s dates to column A.');
+    }
+
+    // Never overwrite a different score: a wrong name in the dropdown would
+    // otherwise silently replace someone else's. Resubmitting the same score is fine.
+    const cell = sheet.getRange(row, col);
+    const existing = cell.getValue();
+    if (existing !== '' && Number(existing) !== score) {
+      return failure_(name + ' already has ' + existing + ' for ' + date + '. If that\'s wrong, fix it in the sheet.');
+    }
+
+    cell.setValue(score);
+    console.log('Wrote ' + score + ' for ' + name + ' at row ' + row + ', col ' + col);
+    return jsonResponse_({ success: true, row: row, col: col });
+  } catch (error) {
+    console.error(error);
+    return failure_(String(error.message || error));
+  }
+}
+
+// Read-only check to run from the editor after changes: logs the players the
+// form will show, and which rows today and this day last year map to.
+function checkScoreUpdater() {
+  const values = getScoreSheet_().getDataRange().getValues();
+  const timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+  const today = new Date();
+  const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+  console.log('Players: ' + readPlayers_(values).join(', '));
+  [today, lastYear].forEach(day => {
+    const date = Utilities.formatDate(day, timezone, 'dd/MM/yyyy');
+    const row = findDateRow_(values, date, timezone);
+    console.log(date + ' -> ' + (row === -1 ? 'no row' : 'row ' + row));
+  });
+}
+
+function getScoreSheet_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SCORE_SHEET_NAME);
+  if (!sheet) throw new Error('Tab "' + SCORE_SHEET_NAME + '" not found.');
+  return sheet;
+}
+
+// Names run from B1 rightwards until the first blank header.
+function readPlayers_(values) {
+  const players = [];
+  for (let col = 1; col < values[0].length && String(values[0][col]).trim(); col++) {
+    players.push(String(values[0][col]).trim());
+  }
+  return players;
+}
+
+// 1-based row whose column A date is exactly `date` (dd/mm/yyyy), or -1.
+// Matching the year too stops a submission landing on last year's row.
+function findDateRow_(values, date, timezone) {
+  for (let i = 1; i < values.length; i++) {
+    if (normaliseDate_(values[i][0], timezone) === date) return i + 1;
+  }
+  return -1;
+}
+
+// Date cells and 'd/m/yyyy' text both become 'dd/mm/yyyy'. Anything else -> null.
+function normaliseDate_(value, timezone) {
+  if (value instanceof Date) return Utilities.formatDate(value, timezone, 'dd/MM/yyyy');
+  const match = String(value || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  return match[1].padStart(2, '0') + '/' + match[2].padStart(2, '0') + '/' + match[3];
+}
+
+function failure_(error) {
+  console.warn(error);
+  return jsonResponse_({ success: false, error: error });
+}
+
+function jsonResponse_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
