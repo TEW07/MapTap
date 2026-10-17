@@ -7,7 +7,7 @@ project "MapTap Score Updater").
 |---|---|
 | `ScoreUpdater.js` | Web app the React form talks to: `doGet` lists players, `doPost` writes a score. |
 | `Config.js` | Tab names, timezone, sender name. |
-| `Stats.js` | Weekly stats: points, averages, highs/lows, missed days, change on last week. |
+| `Stats.js` | Weekly stats and the monthly leaderboard: points, averages, highs/lows, missed days, change on last week. |
 | `Banter.js` | The insults. Edit freely. |
 | `WeeklyEmail.js` | Builds the email (subject, HTML, plain text). |
 | `Broadcast.js` | Contacts tab, Broadcast Log tab, sending email. Reused by future broadcasts. |
@@ -78,10 +78,16 @@ These files don't need a redeploy. Triggers always run the latest saved code.
   day, `sendWeeklySummary`/`previewWeeklySummary` report the last full week.
 - Points: each day's scores are ranked and looked up in the **Scoring System** tab, the
   same as the leaderboard tabs. Ties share the higher rank.
-- **Missed days score 0 points** (same as the leaderboard), and are called out by name.
+- **Missed days score 0 points** (same as the leaderboard). Each forgotten day puts a 🤡
+  next to the player's name in both tables, all month, plus a Hall of shame line.
+- The **monthly leaderboard** is worked out from Sheet1 with the same scoring as the
+  leaderboard tabs, so it doesn't depend on tab names. *Move* is the change in position
+  since last Sunday. A week that crosses into a new month also shows the old month's
+  final table.
 - **Averages only count days played**, so a missed day isn't punished twice.
-- Anyone without a Sunday score at 22:30 gets a "no score yet today" line. Scores added
-  later still count on the leaderboard but won't be in that week's email.
+- Anyone without a Sunday score at send time gets ⏰ rather than a clown (they may still
+  play), plus a "No score yet" line. Scores added later still count on the leaderboard but
+  won't be in that week's email.
 
 ## Sending from a separate account
 

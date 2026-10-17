@@ -74,6 +74,8 @@ test('week dates run Monday to Sunday', () => {
   assert.equal(gs.weekEndingOnOrBefore_('2026-10-18'), '2026-10-18') // Sunday
   assert.equal(gs.parseDateText_('5/10/2026'), '2026-10-05')
   assert.equal(gs.formatDay_('2026-10-05'), 'Mon 5 Oct')
+  assert.equal(gs.monthEnd_('2026-12-15'), '2026-12-31')
+  assert.equal(gs.monthEnd_('2028-02-10'), '2028-02-29')
 })
 
 test('weekly stats for 5-11 Oct', () => {
@@ -92,15 +94,23 @@ test('weekly stats for 5-11 Oct', () => {
   assert.equal(stats.mostImproved.name, 'Nathan')
 })
 
-test('missed days and Sunday stragglers', () => {
-  const sunday = { ...data, days: { ...data.days, '2026-10-11': { ...data.days['2026-10-11'], Henry: null } } }
-  const stats = gs.computeWeeklyStats_(sunday, '2026-10-11', POINTS)
-  assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.missed])), [['Henry', 1]])
+test('forgotten days get a clown; a missing Sunday score gets an alarm clock instead', () => {
+  const days = { ...data.days }
+  days['2026-10-07'] = { ...days['2026-10-07'], Will: null }
+  days['2026-10-11'] = { ...days['2026-10-11'], Henry: null }
+  const stats = gs.computeWeeklyStats_({ ...data, days }, '2026-10-11', POINTS)
+  assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.forgotten])), [['Will', ['2026-10-07']]])
   assert.deepEqual(plain(stats.stillToPlay.map(p => p.name)), ['Henry'])
-  assert.match(gs.buildWeeklyEmail_(stats, () => 0).text, /No score yet for Sun 11 Oct from Henry/)
   const henry = stats.standings.find(p => p.name === 'Henry')
   assert.equal(henry.played, 6)
   assert.equal(henry.average, (907 + 960 + 865 + 893 + 945 + 937) / 6)
+
+  const email = gs.buildWeeklyEmail_(stats, () => 0)
+  assert.match(email.text, /Will 🤡: /)
+  assert.match(email.text, /Henry ⏰: /)
+  assert.match(email.text, /Hall of shame: Will forgot Wed 7 Oct/)
+  assert.match(email.text, /No score yet for Sun 11 Oct from Henry/)
+  assert.match(email.text, /🤡 = a day you forgot to play/)
 })
 
 test('a week still in progress only counts days so far', () => {
@@ -109,10 +119,47 @@ test('a week still in progress only counts days so far', () => {
   const pointsByName = Object.fromEntries(stats.standings.map(p => [p.name, p.points]))
   const expected = toDay(RUNNING_TOTALS['2026-10-14'].map((total, i) => total - RUNNING_TOTALS['2026-10-11'][i]))
   assert.deepEqual(pointsByName, expected)
-  assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.missed])), [['Nathan', 1]]) // 13 Oct only
+  assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.forgotten.length])), [['Nathan', 1]]) // 13 Oct only
   assert.equal(stats.stillToPlay.length, 0) // everyone has a score for the 14th
   const email = gs.buildWeeklyEmail_(stats, () => 0)
   assert.match(email.text, /Mon 12 Oct – Sun 18 Oct \(so far, up to Wed 14 Oct\)/)
+})
+
+test('month leaderboard matches the running totals, with movement since last week', () => {
+  // Sheet1 data here starts on 4 Oct, so compare against totals minus 3 Oct's.
+  const stats = gs.computeWeeklyStats_(data, '2026-10-18', POINTS, '2026-10-14')
+  assert.equal(stats.months.length, 1)
+  const october = stats.months[0]
+  assert.equal(october.isFinal, false)
+  const points = Object.fromEntries(october.standings.map(p => [p.name, p.points]))
+  const expected = toDay(RUNNING_TOTALS['2026-10-14'].map((total, i) => total - RUNNING_TOTALS['2026-10-03'][i]))
+  assert.deepEqual(points, expected)
+  assert.equal(october.standings[0].name, 'Rob')
+  const movement = Object.fromEntries(october.standings.map(p => [p.name, p.movement]))
+  assert.equal(movement.Sean, 4) // 6th= after 11 Oct, 2nd by 14 Oct
+  assert.equal(movement.Henry, -2) // 2nd -> 4th
+  assert.equal(movement.Rob, 0)
+  assert.deepEqual(plain(october.standings.find(p => p.name === 'Nathan').forgotten), ['2026-10-13'])
+
+  const email = gs.buildWeeklyEmail_(stats, () => 0)
+  assert.match(email.text, /OCTOBER LEADERBOARD \(UP TO WED 14 OCT\)\n1\. Rob: 62 pts =/)
+  assert.match(email.text, /Sean: 44 pts ▲4/)
+  assert.match(email.text, /Nathan 🤡: 19 pts/)
+})
+
+test('a week crossing into a new month shows the old month\'s final table', () => {
+  const days = {}
+  for (const day of ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31']) {
+    days[day] = { Ann: 950, Bob: 900 }
+  }
+  days['2026-11-01'] = { Ann: 800, Bob: 900 }
+  const stats = gs.computeWeeklyStats_({ players: ['Ann', 'Bob'], days }, '2026-11-01', POINTS)
+  assert.deepEqual(plain(stats.months.map(m => [m.monthKey, m.isFinal])), [['2026-10-01', true], ['2026-11-01', false]])
+  assert.deepEqual(plain(stats.months[1].standings.map(p => [p.name, p.points])), [['Bob', 10], ['Ann', 7]])
+  const email = gs.buildWeeklyEmail_(stats, () => 0)
+  assert.equal(email.subject, '🎯 MapTap weekly: Ann wins the week · Ann wins October')
+  assert.match(email.text, /OCTOBER LEADERBOARD \(FINAL\)/)
+  assert.match(email.text, /NOVEMBER LEADERBOARD \(UP TO SUN 1 NOV\)/)
 })
 
 test('a week with no scores is flagged so nothing is sent', () => {
@@ -123,7 +170,7 @@ test('a week with no scores is flagged so nothing is sent', () => {
 test('email renders every section', () => {
   const stats = gs.computeWeeklyStats_(data, '2026-10-11', POINTS)
   const email = gs.buildWeeklyEmail_(stats, () => 0)
-  assert.equal(email.subject, '🎯 MapTap weekly: Rob wins the week')
+  assert.equal(email.subject, '🎯 MapTap weekly: Rob wins the week · Rob leads October')
   assert.match(email.text, /Mon 5 Oct – Sun 11 Oct/)
   assert.match(email.text, /1\. Rob: 44 pts/)
   assert.match(email.text, /Wooden spoon: Tom & Will on 18 pts/)
