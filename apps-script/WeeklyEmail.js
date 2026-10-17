@@ -65,13 +65,14 @@ function weeklyCallouts_(stats, random) {
 
   if (stats.stillToPlay.length) {
     const names = namesOf(stats.stillToPlay);
-    add('⏰', 'No score yet today from ' + names, 'stillToPlay', names);
+    add('⏰', 'No score yet for ' + formatDay_(stats.lastDayKey) + ' from ' + names, 'stillToPlay', names);
   }
   return callouts;
 }
 
 function buildWeeklyEmail_(stats, random) {
-  const range = formatDay_(stats.weekStartKey) + ' – ' + formatDay_(stats.weekEndKey);
+  const range = formatDay_(stats.weekStartKey) + ' – ' + formatDay_(stats.weekEndKey) +
+    (stats.lastDayKey < stats.weekEndKey ? ' (so far, up to ' + formatDay_(stats.lastDayKey) + ')' : '');
   const winners = joinList_(stats.winners.map(player => player.name));
   const subject = '🎯 MapTap weekly: ' + winners +
     (stats.winners.length > 1 ? ' share the week' : ' wins the week');
