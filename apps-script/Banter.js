@@ -37,10 +37,11 @@ const BANTER = {
     'Steep decline from {name}. Much like their chat.',
   ],
   missed: [
-    '{name}, the game takes two minutes. You\'ve got two minutes.',
-    'Scared, {name}? Or just busy being bad at it?',
-    'Zero points, zero excuses, {name}.',
-    '{name} went missing. Much like their sense of direction.',
+    'One job, {name}. One two-minute job. Enjoy the clown.',
+    '{name} forgot. The clown stays on the leaderboard all month. Wear it with pride.',
+    '{name} had more important things to do, apparently. Like nothing.',
+    'Zero points for {name}. Sometimes the map wins by default.',
+    '{name}: too scared to play, or just forgot how phones work?',
   ],
   stillToPlay: [
     'There\'s still time, {name}. Not much, but some.',

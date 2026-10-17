@@ -60,7 +60,8 @@ function weeklyCallouts_(stats, random) {
   }
 
   stats.noShows.forEach(player => {
-    add('👻', 'Missed: ' + player.name + ', ' + plural_(player.missed, 'day'), 'missed', player.name);
+    add('🤡', 'Hall of shame: ' + player.name + ' forgot ' + joinList_(player.forgotten.map(formatDay_)),
+      'missed', player.name);
   });
 
   if (stats.stillToPlay.length) {
@@ -70,28 +71,68 @@ function weeklyCallouts_(stats, random) {
   return callouts;
 }
 
+// One clown per forgotten day, and an alarm clock for anyone yet to play
+// the final day.
+function badges_(player) {
+  const clowns = player.forgotten.length;
+  return (clowns > 3 ? ' 🤡×' + clowns : clowns ? ' ' + '🤡'.repeat(clowns) : '') +
+    (player.stillToPlay ? ' ⏰' : '');
+}
+
+function formatMovement_(movement) {
+  return movement === null ? '' : formatChange_(movement);
+}
+
+function monthTitle_(month) {
+  return formatMonth_(month.monthKey) + ' leaderboard' +
+    (month.isFinal ? ' (final)' : ' (up to ' + formatDay_(month.endKey) + ')');
+}
+
+// Subject names the week's winner and whoever's top of the month. A finished
+// month (when the week crosses into a new one) takes priority.
+function weeklySubject_(stats) {
+  const weekWinners = stats.winners.map(player => player.name);
+  const month = stats.months.filter(m => m.isFinal)[0] || stats.months[stats.months.length - 1];
+  const leaders = month.standings.filter(player => player.position === 1).map(player => player.name);
+  const monthName = formatMonth_(month.monthKey);
+  const monthPart = month.isFinal
+    ? (leaders.length > 1 ? ' share ' : ' wins ') + monthName
+    : (leaders.length > 1 ? ' share the lead in ' : ' leads ') + monthName;
+  return '🎯 MapTap weekly: ' + joinList_(weekWinners) +
+    (weekWinners.length > 1 ? ' share the week' : ' wins the week') +
+    ' · ' + joinList_(leaders) + monthPart;
+}
+
 function buildWeeklyEmail_(stats, random) {
   const range = formatDay_(stats.weekStartKey) + ' – ' + formatDay_(stats.weekEndKey) +
     (stats.lastDayKey < stats.weekEndKey ? ' (so far, up to ' + formatDay_(stats.lastDayKey) + ')' : '');
-  const winners = joinList_(stats.winners.map(player => player.name));
-  const subject = '🎯 MapTap weekly: ' + winners +
-    (stats.winners.length > 1 ? ' share the week' : ' wins the week');
   const groupChange = formatChange_(stats.groupAverageChange);
   const groupLine = 'Group average: ' + Math.round(stats.groupAverage) +
     (groupChange ? ' (' + groupChange + ' on last week)' : '');
   const callouts = weeklyCallouts_(stats, random);
-  const footer = 'Points use the Scoring System tab, same as the leaderboard. ' +
-    'Missed days score 0 points; averages only count days played.';
+
+  const legend = [];
+  const everyone = stats.standings.concat(...stats.months.map(month => month.standings));
+  if (everyone.some(player => player.forgotten.length)) legend.push('🤡 = a day you forgot to play (0 pts)');
+  if (stats.stillToPlay.length) legend.push('⏰ = no score yet for ' + formatDay_(stats.lastDayKey));
+  const footer = (legend.length ? legend.join(' · ') + '. ' : '') +
+    'Points use the Scoring System tab, same as the leaderboard. Averages only count days played.';
 
   const text = [
     'MapTap weekly summary: ' + range,
     groupLine,
     '',
-    ...stats.standings.map(player => player.position + '. ' + player.name + ': ' +
+    'THIS WEEK',
+    ...stats.standings.map(player => player.position + '. ' + player.name + badges_(player) + ': ' +
       plural_(player.points, 'pt') + ' ' + formatChange_(player.pointsChange) +
       ', avg ' + (player.average === null ? '-' : Math.round(player.average) + ' ' +
-      formatChange_(player.averageChange)) +
-      (player.missed ? ', missed ' + player.missed : '')),
+      formatChange_(player.averageChange))),
+    ...[].concat(...stats.months.map(month => [
+      '',
+      monthTitle_(month).toUpperCase(),
+      ...month.standings.map(player => player.position + '. ' + player.name + badges_(player) + ': ' +
+        plural_(player.points, 'pt') + ' ' + formatMovement_(player.movement)),
+    ])),
     '',
     ...callouts.map(c => c.icon + ' ' + c.fact + '\n   ' + c.banter),
     '',
@@ -101,24 +142,40 @@ function buildWeeklyEmail_(stats, random) {
   const cell = 'padding:8px 6px;border-bottom:1px solid #e5e7eb;';
   const head = 'padding:8px 6px;border-bottom:2px solid #111827;text-align:left;font-size:12px;' +
     'color:#6b7280;text-transform:uppercase;';
-  const change = value => {
-    const label = formatChange_(value);
+  const heading = title => '<h2 style="font-size:16px;margin:24px 0 8px;">' + escapeHtml_(title) + '</h2>';
+  const change = label => {
     if (!label) return '';
     const colour = label[0] === '▲' ? '#15803d' : label[0] === '▼' ? '#b91c1c' : '#6b7280';
     return ' <span style="font-size:12px;color:' + colour + ';">' + label + '</span>';
   };
+  // columns: [header, player => cell html]
+  const table = (players, columns) =>
+    '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0;">' +
+    '<tr>' + columns.map(c => '<th style="' + head + '">' + c[0] + '</th>').join('') + '</tr>' +
+    players.map(player => {
+      const top = player.position === 1;
+      return '<tr' + (top ? ' style="background:#ecfdf5;"' : '') + '>' +
+        columns.map((c, i) => '<td style="' + cell + (top && i === 1 ? 'font-weight:bold;' : '') + '">' +
+          c[1](player) + '</td>').join('') +
+        '</tr>';
+    }).join('') +
+    '</table>';
+  const position = player => String(player.position);
+  const name = player => escapeHtml_(player.name) + badges_(player);
 
-  const rows = stats.standings.map(player => {
-    const isWinner = player.position === 1;
-    return '<tr' + (isWinner ? ' style="background:#ecfdf5;"' : '') + '>' +
-      '<td style="' + cell + '">' + player.position + '</td>' +
-      '<td style="' + cell + (isWinner ? 'font-weight:bold;' : '') + '">' + escapeHtml_(player.name) + '</td>' +
-      '<td style="' + cell + '">' + player.points + change(player.pointsChange) + '</td>' +
-      '<td style="' + cell + '">' + (player.average === null ? '–' : Math.round(player.average)) +
-        change(player.averageChange) + '</td>' +
-      '<td style="' + cell + '">' + (player.missed || '') + '</td>' +
-      '</tr>';
-  }).join('');
+  const weekTable = table(stats.standings, [
+    ['#', position],
+    ['Player', name],
+    ['Pts', player => player.points + change(formatChange_(player.pointsChange))],
+    ['Avg', player => (player.average === null ? '–' : Math.round(player.average)) +
+      change(formatChange_(player.averageChange))],
+  ]);
+  const monthTables = stats.months.map(month => heading(monthTitle_(month)) + table(month.standings, [
+    ['#', position],
+    ['Player', name],
+    ['Pts', player => String(player.points)],
+    ['Move', player => change(formatMovement_(player.movement)) || '<span style="color:#9ca3af;">–</span>'],
+  ])).join('');
 
   const calloutHtml = callouts.map(c =>
     '<p style="margin:0 0 14px;">' +
@@ -129,15 +186,12 @@ function buildWeeklyEmail_(stats, random) {
     '<div style="font-family:Arial,Helvetica,sans-serif;color:#111827;max-width:560px;margin:0 auto;">' +
     '<h1 style="font-size:22px;margin:0 0 4px;">🎯 MapTap weekly summary</h1>' +
     '<p style="margin:0 0 4px;color:#6b7280;">' + escapeHtml_(range) + '</p>' +
-    '<p style="margin:0 0 16px;color:#6b7280;">' + escapeHtml_(groupLine) + '</p>' +
-    '<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 20px;">' +
-    '<tr><th style="' + head + '">#</th><th style="' + head + '">Player</th>' +
-    '<th style="' + head + '">Pts</th><th style="' + head + '">Avg</th>' +
-    '<th style="' + head + '">Missed</th></tr>' +
-    rows + '</table>' +
-    calloutHtml +
+    '<p style="margin:0;color:#6b7280;">' + escapeHtml_(groupLine) + '</p>' +
+    heading('This week') + weekTable +
+    monthTables +
+    heading('Honours & humiliations') + calloutHtml +
     '<p style="margin:20px 0 0;font-size:12px;color:#9ca3af;">' + escapeHtml_(footer) + '</p>' +
     '</div>';
 
-  return { subject: subject, text: text, html: html };
+  return { subject: weeklySubject_(stats), text: text, html: html };
 }
