@@ -1,41 +1,68 @@
 // Weekly summary email. See README.md for setup.
 //
-//   setupWeeklySummary()   - run once: creates the tabs and the Sunday trigger
-//   previewWeeklySummary() - emails the summary to you only, any day
-//   sendWeeklySummary()    - what the trigger runs, Sunday ~22:30 UK time
+//   setupWeeklySummary()    - run once (and after changing the time in Config.js):
+//                             creates the tabs and the weekly trigger
+//   previewWeeklySummary()  - emails you only: the last full Monday-Sunday week
+//   previewThisWeekSoFar()  - emails you only: this week up to today, i.e. roughly
+//                             what Sunday's email will look like
+//   testScheduledPreview()  - runs previewWeeklySummary from a trigger in ~5 minutes,
+//                             to check scheduling works without waiting for Sunday
+//   sendWeeklySummary()     - the real thing, to everyone ticked on Contacts. The
+//                             trigger runs this.
 
 function setupWeeklySummary() {
   ensureContactsSheet_();
   ensureLogSheet_();
 
   // Replace any existing trigger so running setup twice doesn't double-send.
-  ScriptApp.getProjectTriggers()
-    .filter(trigger => trigger.getHandlerFunction() === 'sendWeeklySummary')
-    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+  deleteTriggers_('sendWeeklySummary');
   ScriptApp.newTrigger('sendWeeklySummary')
     .timeBased()
-    .onWeekDay(ScriptApp.WeekDay.SUNDAY)
-    .atHour(22)
-    .nearMinute(30)
+    .onWeekDay(ScriptApp.WeekDay[MAPTAP.WEEKLY_SUMMARY_DAY])
+    .atHour(MAPTAP.WEEKLY_SUMMARY_HOUR)
+    .nearMinute(MAPTAP.WEEKLY_SUMMARY_MINUTE)
     .inTimezone(MAPTAP.TIMEZONE)
     .create();
+  console.log('Weekly summary scheduled for ' + MAPTAP.WEEKLY_SUMMARY_DAY + 's at about ' +
+    MAPTAP.WEEKLY_SUMMARY_HOUR + ':' + String(MAPTAP.WEEKLY_SUMMARY_MINUTE).padStart(2, '0') +
+    ' ' + MAPTAP.TIMEZONE);
 }
 
+// On Sunday this is the week ending today; any other day it's last week.
 function sendWeeklySummary() {
-  runWeeklySummary_(false);
+  runWeeklySummary_(false, weekEndingOnOrBefore_(todayKey_()));
 }
 
 function previewWeeklySummary() {
-  runWeeklySummary_(true);
+  runWeeklySummary_(true, weekEndingOnOrBefore_(todayKey_()));
 }
 
-function runWeeklySummary_(isPreview) {
+function previewThisWeekSoFar() {
+  const today = todayKey_();
+  runWeeklySummary_(true, weekEndingOnOrBefore_(addDays_(today, 6)), today);
+}
+
+function testScheduledPreview() {
+  deleteTriggers_('previewWeeklySummary'); // tidy up any earlier test
+  ScriptApp.newTrigger('previewWeeklySummary').timeBased().after(5 * 60 * 1000).create();
+  console.log('Preview email scheduled for about 5 minutes from now.');
+}
+
+function todayKey_() {
+  return Utilities.formatDate(new Date(), MAPTAP.TIMEZONE, 'yyyy-MM-dd');
+}
+
+function deleteTriggers_(handler) {
+  ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === handler)
+    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+}
+
+function runWeeklySummary_(isPreview, weekEndKey, asOfKey) {
   const broadcast = isPreview ? 'Weekly Summary (preview)' : 'Weekly Summary';
   let recipients = [];
   try {
-    // On Sunday this is the week ending today; any other day it's last week.
-    const todayKey = Utilities.formatDate(new Date(), MAPTAP.TIMEZONE, 'yyyy-MM-dd');
-    const stats = computeWeeklyStats_(readScores_(), weekEndingOnOrBefore_(todayKey), readPointsByRank_());
+    const stats = computeWeeklyStats_(readScores_(), weekEndKey, readPointsByRank_(), asOfKey);
     if (!stats.hasScores) {
       logBroadcast_(broadcast, 'email', [], 'SKIPPED', 'No scores for week ending ' + stats.weekEndKey);
       return;

@@ -45,8 +45,18 @@ The form only sees changes to this file after a **redeploy**:
      It's your own script.
    - This creates a **Contacts** tab (everyone from Sheet1, Weekly Summary ticked), a
      **Broadcast Log** tab, and a trigger for Sundays at about 22:30 UK time.
-4. Fill in everyone's **Email** on the Contacts tab.
-5. Run **`previewWeeklySummary`**: it emails last week's summary to you only.
+4. On the Contacts tab, fill in **only your own email** for now.
+5. Test it (all of these work on any day):
+   - **`previewThisWeekSoFar`**: emails you this week up to today. This is roughly
+     what Sunday's email will look like.
+   - **`previewWeeklySummary`**: emails you the last full Monday–Sunday week.
+   - **`sendWeeklySummary`**: the real send, which goes to everyone on Contacts with an
+     email, so with only yours filled in it's just you. Don't run it once everyone's
+     emails are in, or the group gets last week's summary.
+   - **`testScheduledPreview`**: emails you the preview from a trigger in about 5
+     minutes, which proves scheduling works. Afterwards, delete the leftover
+     `previewWeeklySummary` trigger if it's still listed on the Triggers page.
+6. Fill in everyone else's email.
 
 These files don't need a redeploy. Triggers always run the latest saved code.
 
@@ -57,13 +67,15 @@ These files don't need a redeploy. Triggers always run the latest saved code.
   run fails.
 - **Someone wants out?** Untick their Weekly Summary box.
 - **New player?** Add their column to Sheet1 and a row to Contacts. Nothing else needed.
-- **Change the time?** Edit `setupWeeklySummary` and run it again. It replaces the old
-  trigger rather than adding a second one.
+- **Change the time?** Edit `WEEKLY_SUMMARY_DAY` / `_HOUR` / `_MINUTE` in `Config.js`,
+  save, and run `setupWeeklySummary` again. It replaces the old trigger rather than
+  adding a second one. The Triggers page only shows the hour (e.g. "10pm to 11pm").
+  Google sends within about 15 minutes of the set time.
 
 ## How the numbers work
 
-- Weeks run Monday–Sunday. Sunday's run reports on the week ending that day. A preview
-  on any other day reports on the last full week.
+- Weeks run Monday–Sunday. Sunday's run reports on the week ending that day. Any other
+  day, `sendWeeklySummary`/`previewWeeklySummary` report the last full week.
 - Points: each day's scores are ranked and looked up in the **Scoring System** tab, the
   same as the leaderboard tabs. Ties share the higher rank.
 - **Missed days score 0 points** (same as the leaderboard), and are called out by name.

@@ -57,7 +57,9 @@ function pointsForDay_(scores, pointsByRank) {
 }
 
 // data is { players: ['Henry', ...], days: { '2026-10-05': { Henry: 907, Max: null, ... } } }
-function summariseWeek_(data, weekEndKey, pointsByRank) {
+// Days after asOfKey haven't happened yet, so they're left out rather than
+// counted as missed.
+function summariseWeek_(data, weekEndKey, pointsByRank, asOfKey) {
   const dayKeys = [];
   for (let offset = 6; offset >= 0; offset--) dayKeys.push(addDays_(weekEndKey, -offset));
 
@@ -68,7 +70,7 @@ function summariseWeek_(data, weekEndKey, pointsByRank) {
 
   dayKeys.forEach(day => {
     const scores = data.days[day];
-    if (!scores) return; // no row for this date in Sheet1
+    if (!scores || (asOfKey && day > asOfKey)) return; // no row in Sheet1, or still to come
     const points = pointsForDay_(scores, pointsByRank);
     players.forEach(player => {
       const score = scores[player.name];
@@ -89,8 +91,10 @@ function summariseWeek_(data, weekEndKey, pointsByRank) {
   return { dayKeys: dayKeys, players: players, entries: entries };
 }
 
-function computeWeeklyStats_(data, weekEndKey, pointsByRank) {
-  const week = summariseWeek_(data, weekEndKey, pointsByRank);
+// asOfKey is optional: pass today to preview a week that's still going.
+function computeWeeklyStats_(data, weekEndKey, pointsByRank, asOfKey) {
+  const lastDayKey = asOfKey && asOfKey < weekEndKey ? asOfKey : weekEndKey;
+  const week = summariseWeek_(data, weekEndKey, pointsByRank, lastDayKey);
   const weekStartKey = week.dayKeys[0];
   if (!week.entries.length) {
     return { weekStartKey: weekStartKey, weekEndKey: weekEndKey, hasScores: false };
@@ -125,13 +129,14 @@ function computeWeeklyStats_(data, weekEndKey, pointsByRank) {
   const mostImproved = byChange[0];
   const biggestDrop = byChange[byChange.length - 1];
 
-  // Scores still missing on the final day. At 22:30 on Sunday some people
-  // may not have played yet.
-  const lastDay = data.days[weekEndKey];
+  // Scores still missing on the final day so far. At 22:30 on Sunday some
+  // people may not have played yet.
+  const lastDay = data.days[lastDayKey];
 
   return {
     weekStartKey: weekStartKey,
     weekEndKey: weekEndKey,
+    lastDayKey: lastDayKey,
     hasScores: true,
     standings: standings,
     winners: standings.filter(player => player.points === topPoints),

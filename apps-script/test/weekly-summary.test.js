@@ -97,9 +97,22 @@ test('missed days and Sunday stragglers', () => {
   const stats = gs.computeWeeklyStats_(sunday, '2026-10-11', POINTS)
   assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.missed])), [['Henry', 1]])
   assert.deepEqual(plain(stats.stillToPlay.map(p => p.name)), ['Henry'])
+  assert.match(gs.buildWeeklyEmail_(stats, () => 0).text, /No score yet for Sun 11 Oct from Henry/)
   const henry = stats.standings.find(p => p.name === 'Henry')
   assert.equal(henry.played, 6)
   assert.equal(henry.average, (907 + 960 + 865 + 893 + 945 + 937) / 6)
+})
+
+test('a week still in progress only counts days so far', () => {
+  // Previewing the week ending Sun 18 Oct on Wed 14 Oct.
+  const stats = gs.computeWeeklyStats_(data, '2026-10-18', POINTS, '2026-10-14')
+  const pointsByName = Object.fromEntries(stats.standings.map(p => [p.name, p.points]))
+  const expected = toDay(RUNNING_TOTALS['2026-10-14'].map((total, i) => total - RUNNING_TOTALS['2026-10-11'][i]))
+  assert.deepEqual(pointsByName, expected)
+  assert.deepEqual(plain(stats.noShows.map(p => [p.name, p.missed])), [['Nathan', 1]]) // 13 Oct only
+  assert.equal(stats.stillToPlay.length, 0) // everyone has a score for the 14th
+  const email = gs.buildWeeklyEmail_(stats, () => 0)
+  assert.match(email.text, /Mon 12 Oct – Sun 18 Oct \(so far, up to Wed 14 Oct\)/)
 })
 
 test('a week with no scores is flagged so nothing is sent', () => {
