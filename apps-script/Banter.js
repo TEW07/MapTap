@@ -43,6 +43,16 @@ const BANTER = {
     'Zero points for {name}. Sometimes the map wins by default.',
     '{name}: too scared to play, or just forgot how phones work?',
   ],
+  // Texts: plain characters only (no emoji or curly quotes) and short, so
+  // each reminder stays a single SMS. Lines that don't fit are dropped.
+  reminder: [
+    'Tick tock, {name}. The map won\'t tap itself.',
+    '{name}, the clown costume is ready and waiting.',
+    'Don\'t make us put a clown next to your name, {name}.',
+    '{name}, two minutes. You can spare two minutes.',
+    'The leaderboard has noticed your absence, {name}.',
+    '{name}, even a random tap beats a zero.',
+  ],
   stillToPlay: [
     'There\'s still time, {name}. Not much, but some.',
     'Clock\'s ticking, {name}. Late scores still count on the leaderboard, just not in here.',

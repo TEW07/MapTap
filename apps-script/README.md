@@ -6,15 +6,18 @@ project "MapTap Score Updater").
 | File | What it does |
 |---|---|
 | `ScoreUpdater.js` | Web app the React form talks to: `doGet` lists players, `doPost` writes a score. |
-| `Config.js` | Tab names, timezone, sender name. |
+| `Config.js` | Tab names, timezone, send times, sender names, text limits. |
 | `Stats.js` | Weekly stats and the monthly leaderboard: points, averages, highs/lows, missed days, change on last week. |
 | `Banter.js` | The insults. Edit freely. |
 | `WeeklyEmail.js` | Builds the email (subject, HTML, plain text). |
-| `Broadcast.js` | Contacts tab, Broadcast Log tab, sending email. Reused by future broadcasts. |
+| `Broadcast.js` | Contacts tab, Broadcast Log tab, tab locking, sending email and SMS (Twilio). |
+| `Reminders.js` | Who gets tonight's reminder text, and the text itself. |
+| `DailyReminder.js` | Reads the sheet, sends reminder texts, installs the 8pm trigger, Twilio credentials menu. |
 | `WeeklySummary.js` | Reads the sheet, sends the weekly email, installs the Sunday trigger. |
 
-`Stats.js`, `Banter.js` and `WeeklyEmail.js` don't touch any Google services, so they're
-tested under Node, as is `ScoreUpdater.js` against a fake sheet: `npm test`.
+`Stats.js`, `Banter.js`, `WeeklyEmail.js` and `Reminders.js` don't touch any Google services, so
+they're tested under Node. `ScoreUpdater.js` and the reminder run are tested against a fake
+sheet and a fake Twilio: `npm test`.
 
 ## Updating the form's web app (`ScoreUpdater.js`)
 
@@ -60,13 +63,54 @@ The form only sees changes to this file after a **redeploy**:
 
 These files don't need a redeploy. Triggers always run the latest saved code.
 
+## Daily reminder texts setup
+
+Texts anyone with **Daily Reminder** ticked who has no score in Sheet1 by about 20:00.
+
+**Twilio (once):**
+1. Sign up at twilio.com and **upgrade** the account (trial accounts can't send from a
+   name like "MapTap"). The starting balance is the most you can ever lose.
+2. **Billing → turn auto-recharge off.**
+3. **Messaging → Settings → Geo permissions:** allow the United Kingdom only.
+4. **Account → API keys & tokens → Create API key (Standard).** Note the key's SID (`SK…`)
+   and secret (shown once), plus your Account SID (`AC…`) from the console home page.
+
+**Google:**
+1. Add `Reminders.js` and `DailyReminder.js` as new script files, and replace `Config.js`,
+   `Banter.js` and `Broadcast.js` with the latest versions. Save.
+2. Run **`setupDailyReminder`** and approve the new permission (connecting to an external
+   service). This adds the **Paused Until** column to Contacts, makes Phone plain text,
+   **locks Contacts and Broadcast Log** to you (others can still tick the opt-in
+   boxes), and creates the 8pm trigger.
+3. Reload the sheet → **MapTap → Set Twilio credentials…** → paste the three values.
+4. On Contacts, type phone numbers as normal, e.g. `07700 900123`. Tick **Daily Reminder**
+   for yourself only for now.
+5. Run **`previewDailyReminders`**. It sends nothing, and the execution log shows who would be texted
+   right now and the exact text.
+6. Run **`sendTestText`**: it texts your own number (the Contacts row with your email).
+7. When happy, tick Daily Reminder for everyone else.
+
+**Limits** (in `Config.js`): one reminder per person per day, `MAX_TEXTS_PER_MONTH` (40,
+about £1.65), `MAX_TEXTS_PER_RUN` (6), UK mobiles only, and each text kept to a single
+plain SMS. If today has no row in Sheet1, nobody has played at all, or a limit is hit,
+you get an email instead. `REMINDERS_ENABLED: false` switches texts off. Anyone who can
+edit the sheet can also edit this script, so the Twilio balance (auto-recharge off) is
+the real backstop.
+
+**Pausing someone:** put a date in their **Paused Until** cell. No reminders up to and
+including that day.
+
 ## Day-to-day
 
 - **Did it send?** Check the **Broadcast Log** tab (SENT / SKIPPED / FAILED). Apps
   Script's **Executions** page (left sidebar) has full logs, and Google emails you if a
   run fails.
-- **Someone wants out?** Untick their Weekly Summary box.
+- **Someone wants out?** Untick their Weekly Summary or Daily Reminder box.
+- **Texts:** every text is a SENT row in the Broadcast Log (number masked). Twilio's
+  console (Monitor → Logs → Messaging) shows delivery and the price of each.
 - **New player?** Add their column to Sheet1 and a row to Contacts. Nothing else needed.
+  New Contacts rows sit inside the locked area, so add them yourself, and add tick boxes
+  in their two opt-in cells (Insert → Checkbox).
 - **Change the time?** Edit `WEEKLY_SUMMARY_DAY` / `_HOUR` / `_MINUTE` in `Config.js`,
   save, and run `setupWeeklySummary` again. It replaces the old trigger rather than
   adding a second one. The Triggers page only shows the hour (e.g. "10pm to 11pm").
