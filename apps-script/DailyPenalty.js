@@ -8,6 +8,8 @@
 // MapTap menu (in the sheet), for testing and fixes:
 //   Apply midnight penalty for a date…  - same as the trigger, for any date
 //   Unlock a date's row…                - removes that day's lock
+//   Test scheduled penalty for a date…  - the same, but from a timed trigger in
+//                                         ~5 minutes, to prove scheduling works
 //
 // Needs the ScoreUpdater.js helpers (findDateRow_, readPlayers_, DAY_LOCK_PREFIX),
 // which live in the same project.
@@ -46,6 +48,25 @@ function applyPenaltyForDate() {
   if (!dayKey) return;
   runDailyPenalty_(dayKey, false);
   SpreadsheetApp.getUi().alert('Done. The Broadcast Log says what happened.');
+}
+
+// Triggers can't take arguments, so the date waits in script properties.
+function testScheduledPenalty() {
+  const dayKey = promptForDate_('Penalise which date from a trigger in ~5 minutes? (dd/mm/yyyy)');
+  if (!dayKey) return;
+  PropertiesService.getScriptProperties().setProperty('TEST_PENALTY_DATE', dayKey);
+  deleteTriggers_('runScheduledPenaltyTest');
+  ScriptApp.newTrigger('runScheduledPenaltyTest').timeBased().after(5 * 60 * 1000).create();
+  SpreadsheetApp.getUi().alert('Scheduled. In about 5-15 minutes, check ' + formatDay_(dayKey) +
+    '\'s row and the Broadcast Log. Close the sheet if you like: it runs without you.');
+}
+
+function runScheduledPenaltyTest() {
+  const props = PropertiesService.getScriptProperties();
+  const dayKey = props.getProperty('TEST_PENALTY_DATE');
+  props.deleteProperty('TEST_PENALTY_DATE');
+  deleteTriggers_('runScheduledPenaltyTest'); // one-off: tidy up after itself
+  if (dayKey) runDailyPenalty_(dayKey, false);
 }
 
 function unlockDate() {

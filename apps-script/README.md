@@ -130,6 +130,9 @@ Points formula (first daily points cell, then fill across and down):
 **MapTap → Apply midnight penalty for a date…**. Afterwards use **MapTap → Unlock a
 date's row…** and clear the row, or that day stays locked for real. `previewDailyPenalty`
 (any evening) logs what tonight's run would do, without changing anything.
+**MapTap → Test scheduled penalty for a date…** does the same from a timed trigger in
+about 5 minutes, and **MapTap → Preview weekly email up to a date…** emails you the
+week as it would look on that date, penalties included.
 
 **Fixing a mistake:** as the owner you can still edit a locked row. Delete the -10 or
 type the real score. To let the form accept a late score, unlock the row first.

@@ -167,3 +167,18 @@ test('the form refuses submissions for a locked day', () => {
   assert.equal(sheet1[2][2], -10)
   assert.equal(post({ name: 'Max', date: '02/11/2026', score: 900 }).success, true) // other days unaffected
 })
+
+test('the scheduled test run penalises the stored date and tidies up after itself', () => {
+  const { world, sheet1 } = fakeWorld({ row: [912, '', '', 950] })
+  const props = { TEST_PENALTY_DATE: '2026-11-03' }
+  const deleted = []
+  world.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => props[k], deleteProperty: (k) => { delete props[k] } }) }
+  world.ScriptApp = {
+    getProjectTriggers: () => [{ getHandlerFunction: () => 'runScheduledPenaltyTest' }],
+    deleteTrigger: (t) => deleted.push(t.getHandlerFunction()),
+  }
+  world.runScheduledPenaltyTest()
+  assert.deepEqual(sheet1[2].slice(1), [912, -10, -10, 950])
+  assert.deepEqual(props, {})
+  assert.deepEqual(deleted, ['runScheduledPenaltyTest'])
+})
