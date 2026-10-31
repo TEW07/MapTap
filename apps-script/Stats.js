@@ -52,12 +52,17 @@ function average_(numbers) {
 // Same rules as the leaderboard tabs: rank the day's scores and look each rank
 // up in the Scoring System table. A blank score gets nothing. Ties share the
 // higher rank (two people on 950 both come 1st and the next person is 3rd).
+// A negative score is a midnight penalty (DailyPenalty.js): it's worth exactly
+// that many points and isn't ranked.
 function pointsForDay_(scores, pointsByRank) {
-  const names = Object.keys(scores).filter(name => scores[name] !== null);
+  const names = Object.keys(scores).filter(name => scores[name] !== null && scores[name] >= 0);
   const points = {};
   names.forEach(name => {
     const rank = 1 + names.filter(other => scores[other] > scores[name]).length;
     points[name] = pointsByRank[rank - 1] || 0;
+  });
+  Object.keys(scores).forEach(name => {
+    if (scores[name] !== null && scores[name] < 0) points[name] = scores[name];
   });
   return points;
 }
@@ -82,7 +87,7 @@ function monthEnd_(key) {
 // Dates with no row in Sheet1 are skipped rather than counted as missed.
 function summariseDays_(data, dayKeys, pointsByRank) {
   const players = data.players.map(name => ({
-    name: name, points: 0, total: 0, played: 0, missedDays: [], average: null,
+    name: name, points: 0, total: 0, played: 0, missedDays: [], penalties: {}, average: null,
   }));
   const entries = []; // every score posted: { name, day, score }
 
@@ -92,8 +97,14 @@ function summariseDays_(data, dayKeys, pointsByRank) {
     const points = pointsForDay_(scores, pointsByRank);
     players.forEach(player => {
       const score = scores[player.name];
-      if (score === null || score === undefined) {
+      // Blank, or a penalty: a forgotten day either way, and never a "score"
+      // for averages or highest/lowest.
+      if (score === null || score === undefined || score < 0) {
         player.missedDays.push(day);
+        if (score < 0) {
+          player.penalties[day] = score;
+          player.points += score;
+        }
         return;
       }
       player.played++;

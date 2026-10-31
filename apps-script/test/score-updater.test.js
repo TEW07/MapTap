@@ -19,6 +19,7 @@ function fakeSheet() {
 function load(values) {
   const sheet = {
     getDataRange: () => ({ getValues: () => values }),
+    getProtections: () => [],
     getRange: (row, col) => ({
       getValue: () => values[row - 1][col - 1],
       setValue: (v) => { values[row - 1][col - 1] = v },
@@ -28,6 +29,7 @@ function load(values) {
     Date, // share the test's Date so `instanceof Date` works inside the VM
     console: { log() {}, warn() {}, error() {} },
     SpreadsheetApp: {
+      ProtectionType: { RANGE: 'RANGE' },
       getActiveSpreadsheet: () => ({
         getSheetByName: (name) => (name === 'Sheet1' ? sheet : null),
         getSpreadsheetTimeZone: () => 'Europe/London',

@@ -8,6 +8,8 @@
 // the weekly summary files.
 
 const SCORE_SHEET_NAME = 'Sheet1';
+// Description on the protection DailyPenalty.js puts on each finished day's row.
+const DAY_LOCK_PREFIX = 'MapTap lock ';
 
 // Player names for the form's dropdown, so a new player only needs a new
 // column in Sheet1.
@@ -47,6 +49,11 @@ function doPost(e) {
       return failure_('There\'s no row for ' + date + ' in ' + SCORE_SHEET_NAME + ' yet. Add that month\'s dates to column A.');
     }
 
+    // The web app runs as the sheet owner, so the lock itself wouldn't stop it.
+    if (isRowLocked_(sheet, row)) {
+      return failure_(date + ' closed at midnight, so it\'s too late to submit. Ask whoever runs the sheet if something went wrong.');
+    }
+
     // Never overwrite a different score: a wrong name in the dropdown would
     // otherwise silently replace someone else's. Resubmitting the same score is fine.
     const cell = sheet.getRange(row, col);
@@ -77,6 +84,11 @@ function checkScoreUpdater() {
     const row = findDateRow_(values, date, timezone);
     console.log(date + ' -> ' + (row === -1 ? 'no row' : 'row ' + row));
   });
+}
+
+function isRowLocked_(sheet, row) {
+  return sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE).some(protection =>
+    protection.getDescription().indexOf(DAY_LOCK_PREFIX) === 0 && protection.getRange().getRow() === row);
 }
 
 function getScoreSheet_() {
