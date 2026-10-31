@@ -131,10 +131,10 @@ function rankByPoints_(players) {
   return standings;
 }
 
-// A missed day earns a clown. The final day doesn't count yet: anyone without
-// a score at send time may still play.
+// A missed day earns a clown. A blank final day doesn't count yet: anyone
+// without a score at send time may still play. A penalty means it's over.
 function forgottenDays_(player, lastDayKey) {
-  return player.missedDays.filter(day => day !== lastDayKey);
+  return player.missedDays.filter(day => day !== lastDayKey || day in player.penalties);
 }
 
 // One month's leaderboard up to lastDayKey, plus how far each player moved
