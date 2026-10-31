@@ -24,6 +24,14 @@ const MAPTAP = {
   MAX_TEXTS_PER_RUN: 6,
   MAX_TEXTS_PER_MONTH: 40,
   SMS_VALIDITY_SECONDS: 7200, // undelivered after 2 hours? Give up rather than text at 3am.
+  // Midnight penalty: shortly after midnight, anyone with no score for the
+  // previous day gets PENALTY_POINTS in Sheet1 and that day's row is locked.
+  // After changing the time, run setupDailyPenalty() again.
+  PENALTIES_ENABLED: true,
+  PENALTY_POINTS: -10,
+  PENALTY_HOUR: 0,
+  PENALTY_MINUTE: 15,
+  PENALTIES_START: '2026-11-01', // yyyy-mm-dd: days before this are never penalised
   // Display name on outgoing emails. The address is whoever ran setupWeeklySummary().
   SENDER_NAME: 'MapTap Bot',
 };

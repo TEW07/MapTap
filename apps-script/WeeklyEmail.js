@@ -60,8 +60,11 @@ function weeklyCallouts_(stats, random) {
   }
 
   stats.noShows.forEach(player => {
-    add('🤡', 'Hall of shame: ' + player.name + ' forgot ' + joinList_(player.forgotten.map(formatDay_)),
-      'missed', player.name);
+    const penalised = player.forgotten.some(day => day in player.penalties);
+    const days = player.forgotten.map(day =>
+      formatDay_(day) + (day in player.penalties ? ' (' + player.penalties[day] + ' pts)' : ''));
+    add('🤡', 'Hall of shame: ' + player.name + ' forgot ' + joinList_(days),
+      penalised ? 'penalised' : 'missed', player.name);
   });
 
   if (stats.stillToPlay.length) {
@@ -113,7 +116,7 @@ function buildWeeklyEmail_(stats, random) {
 
   const legend = [];
   const everyone = stats.standings.concat(...stats.months.map(month => month.standings));
-  if (everyone.some(player => player.forgotten.length)) legend.push('🤡 = a day you forgot to play (0 pts)');
+  if (everyone.some(player => player.forgotten.length)) legend.push('🤡 = a day you forgot to play');
   if (stats.stillToPlay.length) legend.push('⏰ = no score yet for ' + formatDay_(stats.lastDayKey));
   const footer = (legend.length ? legend.join(' · ') + '. ' : '') +
     'Points use the Scoring System tab, same as the leaderboard. Averages only count days played.';

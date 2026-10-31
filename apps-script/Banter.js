@@ -43,6 +43,12 @@ const BANTER = {
     'Zero points for {name}. Sometimes the map wins by default.',
     '{name}: too scared to play, or just forgot how phones work?',
   ],
+  penalised: [
+    'Minus ten for {name}. Should have set an alarm.',
+    '{name} forgot, so the map took points off them. Justice.',
+    '{name} is now paying interest on their laziness.',
+    'The midnight tax collector visited {name}. No appeals.',
+  ],
   // Texts: plain characters only (no emoji or curly quotes) and short, so
   // each reminder stays a single SMS. Lines that don't fit are dropped.
   reminder: [

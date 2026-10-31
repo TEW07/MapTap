@@ -14,6 +14,9 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('MapTap')
     .addItem('Set Twilio credentials…', 'setTwilioCredentials')
+    .addSeparator()
+    .addItem('Apply midnight penalty for a date…', 'applyPenaltyForDate')
+    .addItem('Unlock a date\'s row…', 'unlockDate')
     .addToUi();
 }
 
