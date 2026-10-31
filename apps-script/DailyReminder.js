@@ -17,6 +17,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Apply midnight penalty for a date…', 'applyPenaltyForDate')
     .addItem('Unlock a date\'s row…', 'unlockDate')
+    .addSeparator()
+    .addItem('Test scheduled penalty for a date…', 'testScheduledPenalty')
+    .addItem('Preview weekly email up to a date…', 'previewWeekForDate')
     .addToUi();
 }
 

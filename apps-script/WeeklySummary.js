@@ -7,6 +7,8 @@
 //                             what Sunday's email will look like
 //   testScheduledPreview()  - runs previewWeeklySummary from a trigger in ~5 minutes,
 //                             to check scheduling works without waiting for Sunday
+//   MapTap menu → Preview weekly email up to a date… - emails you only: the week
+//                             containing that date, up to and including it
 //   sendWeeklySummary()     - the real thing, to everyone ticked on Contacts. The
 //                             trigger runs this.
 
@@ -40,6 +42,13 @@ function previewWeeklySummary() {
 function previewThisWeekSoFar() {
   const today = todayKey_();
   runWeeklySummary_(true, weekEndingOnOrBefore_(addDays_(today, 6)), today);
+}
+
+function previewWeekForDate() {
+  const dayKey = promptForDate_('Preview the weekly email as it would look on which date? (dd/mm/yyyy)');
+  if (!dayKey) return;
+  runWeeklySummary_(true, weekEndingOnOrBefore_(addDays_(dayKey, 6)), dayKey);
+  SpreadsheetApp.getUi().alert('Preview emailed to you.');
 }
 
 function testScheduledPreview() {
