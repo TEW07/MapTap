@@ -182,3 +182,17 @@ test('the scheduled test run penalises the stored date and tidies up after itsel
   assert.deepEqual(props, {})
   assert.deepEqual(deleted, ['runScheduledPenaltyTest'])
 })
+
+test('a penalty on the final day still gets the clown and the Hall of shame line', () => {
+  const days = {}
+  const week = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']
+  week.forEach((day) => { days[day] = { Henry: 900, Max: 950, Rob: 800, Tom: 850 } })
+  days['2026-11-01'] = { Henry: 900, Max: -10, Rob: 800, Tom: null }
+  const stats = gs.computeWeeklyStats_({ players: PLAYERS, days }, '2026-11-01', [10, 7, 5, 3, 2, 1, 0, 0], '2026-11-01')
+  assert.deepEqual(plain(stats.noShows.map((p) => [p.name, p.forgotten])), [['Max', ['2026-11-01']]])
+  assert.deepEqual(plain(stats.stillToPlay.map((p) => p.name)), ['Tom']) // blank: may still play
+  const email = gs.buildWeeklyEmail_(stats, () => 0)
+  assert.match(email.text, /Hall of shame: Max forgot Sun 1 Nov \(-10 pts\)/)
+  assert.match(email.text, /NOVEMBER LEADERBOARD[\s\S]*Max 🤡: -10 pts/)
+  assert.match(email.text, /Tom ⏰/)
+})
